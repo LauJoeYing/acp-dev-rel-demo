@@ -4,21 +4,22 @@ from datetime import datetime, timedelta
 from virtuals_acp.client import VirtualsACP
 from virtuals_acp.job import ACPJob
 from virtuals_acp.models import ACPJobPhase
-from virtuals_acp.env import EnvSettings
 from dotenv import load_dotenv
 from collections import deque
 
+from env import TravelDemoEnvSettings
+
 load_dotenv(override=True)
 
-def buyer(use_thread_lock: bool = True):
-    env = EnvSettings()
+def traveler(use_thread_lock: bool = True):
+    env = TravelDemoEnvSettings()
 
     if env.WHITELISTED_WALLET_PRIVATE_KEY is None:
         raise ValueError("WHITELISTED_WALLET_PRIVATE_KEY is not set")
-    if env.BUYER_AGENT_WALLET_ADDRESS is None:
-        raise ValueError("BUYER_AGENT_WALLET_ADDRESS is not set")
-    if env.BUYER_ENTITY_ID is None:
-        raise ValueError("BUYER_ENTITY_ID is not set")
+    if env.TRAVELER_AGENT_WALLET_ADDRESS is None:
+        raise ValueError("TRAVELER_AGENT_WALLET_ADDRESS is not set")
+    if env.TRAVELER_ENTITY_ID is None:
+        raise ValueError("TRAVELER_ENTITY_ID is not set")
 
     job_queue = deque()
     job_queue_lock = threading.Lock()
@@ -100,15 +101,15 @@ def buyer(use_thread_lock: bool = True):
 
     acp = VirtualsACP(
         wallet_private_key=env.WHITELISTED_WALLET_PRIVATE_KEY,
-        agent_wallet_address=env.BUYER_AGENT_WALLET_ADDRESS,
+        agent_wallet_address=env.TRAVELER_AGENT_WALLET_ADDRESS,
         on_new_task=on_new_task,
         on_evaluate=on_evaluate,
-        entity_id=env.BUYER_ENTITY_ID
+        entity_id=env.TRAVELER_ENTITY_ID
     )
 
     relevant_agents = acp.browse_agents(
         keyword="travel agency",
-        cluster="travel",
+        cluster="demo-travel",
         graduated=False
     )
     print(f"Relevant agents: {relevant_agents}")
@@ -121,8 +122,11 @@ def buyer(use_thread_lock: bool = True):
 
     with initiate_job_lock:
         chosen_job_offering.initiate_job(
-            service_requirement="Please help me to get a detailed travel plan to HangZhou, China on 26/07/2025, the trip will be 3D2N",
-            evaluator_address=env.BUYER_AGENT_WALLET_ADDRESS,
+            service_requirement={
+                "placeToVisit": "HangZhou, China",
+                "startDate (yyyy/mm/dd)": "2025/07/26",
+                "durationInDays": 2
+            },
             expired_at=datetime.now() + timedelta(minutes=8)
         )
 
@@ -130,4 +134,4 @@ def buyer(use_thread_lock: bool = True):
     threading.Event().wait()
 
 if __name__ == "__main__":
-    buyer()
+    traveler()
