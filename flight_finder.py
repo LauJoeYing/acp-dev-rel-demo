@@ -1,8 +1,6 @@
 import threading
 
-from typing import Tuple
-from game_sdk.game.agent import Agent, WorkerConfig
-from game_sdk.game.custom_types import Argument, Function, FunctionResultStatus
+from game_sdk.game.agent import Agent
 
 from acp_plugin_gamesdk.interface import AcpState, to_serializable_dict
 from acp_plugin_gamesdk.acp_plugin import AcpPlugin, AcpPluginOptions
@@ -12,12 +10,6 @@ from virtuals_acp import ACPJob, ACPJobPhase
 from rich import print, box
 from rich.panel import Panel
 from dotenv import load_dotenv
-
-# GAME Twitter Plugin import
-from twitter_plugin_gamesdk.twitter_plugin import TwitterPlugin
-
-# Native Twitter Plugin import
-# from twitter_plugin_gamesdk.twitter_plugin import TwitterPlugin
 
 load_dotenv(override=True)
 
@@ -30,30 +22,6 @@ def on_evaluate(job: ACPJob):
             # Auto-accept all deliverables for this example
             job.evaluate(True)
             break
-
-# GAME Twitter Plugin options
-options = {
-    "id": "twitter_plugin",
-    "name": "Twitter Plugin",
-    "description": "Twitter Plugin for tweet-related functions.",
-    "credentials": {
-        "game_twitter_access_token": env.BUYER_AGENT_GAME_TWITTER_ACCESS_TOKEN
-    },
-}
-
-# Native Twitter Plugin options
-# options = {
-#     "id": "twitter_plugin",
-#     "name": "Twitter Plugin",
-#     "description": "Twitter Plugin for tweet-related functions.",
-#     "credentials": {
-#         "bearerToken": env.BUYER_AGENT_TWITTER_BEARER_TOKEN,
-#         "apiKey": env.BUYER_AGENT_TWITTER_API_KEY,
-#         "apiSecretKey": env.BUYER_AGENT_TWITTER_API_SECRET_KEY,
-#         "accessToken": env.BUYER_AGENT_TWITTER_ACCESS_TOKEN,
-#         "accessTokenSecret": env.BUYER_AGENT_TWITTER_ACCESS_TOKEN_SECRET,
-#     },
-# }
 
 def buyer(use_thread_lock: bool = True):
     if env.WHITELISTED_WALLET_PRIVATE_KEY is None:
@@ -153,7 +121,6 @@ def buyer(use_thread_lock: bool = True):
                 on_new_task=on_new_task,
                 entity_id=env.BUYER_ENTITY_ID
             ),
-            twitter_plugin=TwitterPlugin(options),
             cluster="<your_agent_cluster>", #example cluster
             graduated=True,
         )
@@ -163,40 +130,6 @@ def buyer(use_thread_lock: bool = True):
         state = acp_plugin.get_acp_state()
         state_dict = to_serializable_dict(state)
         return state_dict
-
-    def post_tweet(content: str, reasoning: str) -> Tuple[FunctionResultStatus, str, dict]:
-        return FunctionResultStatus.DONE, "Tweet has been posted", {}
-        # if acp_plugin.twitter_plugin is not None:
-        #     post_tweet_fn = acp_plugin.twitter_plugin.get_function('post_tweet')
-        #     post_tweet_fn(content)
-        #     return FunctionResultStatus.DONE, "Tweet has been posted", {}
-
-        # return FunctionResultStatus.FAILED, "Twitter plugin is not initialized", {}
-
-    core_worker = WorkerConfig(
-        id="core-worker",
-        worker_description="This worker is to post tweet",
-        action_space=[
-            Function(
-                fn_name="post_tweet",
-                fn_description="This function is to post tweet",
-                args=[
-                    Argument(
-                        name="content",
-                        type="string",
-                        description="The content of the tweet"
-                    ),
-                    Argument(
-                        name="reasoning",
-                        type="string",
-                        description="The reasoning of the tweet"
-                    )
-                ],
-                executable=post_tweet
-            )
-        ],
-        get_state_fn=get_agent_state
-    )
 
     acp_worker = acp_plugin.get_worker(
         {
@@ -218,7 +151,7 @@ def buyer(use_thread_lock: bool = True):
 
         {acp_plugin.agent_description}
         """,
-        workers=[core_worker, acp_worker],
+        workers=[acp_worker],
         get_agent_state_fn=get_agent_state
     )
 

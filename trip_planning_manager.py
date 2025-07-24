@@ -1,24 +1,24 @@
+import json
+import os
 import threading
+import time
 
-from typing import Tuple
+from typing import Tuple, Dict, Any
 from acp_plugin_gamesdk.acp_plugin import AcpPlugin, AcpPluginOptions
-from acp_plugin_gamesdk.interface import AcpState, IInventory, to_serializable_dict
+from acp_plugin_gamesdk.interface import AcpState, to_serializable_dict
 from acp_plugin_gamesdk.env import PluginEnvSettings
 from virtuals_acp.client import VirtualsACP
 from virtuals_acp import ACPJob, ACPJobPhase
-from game_sdk.game.custom_types import Argument, Function, FunctionResultStatus
+from game_sdk.game.custom_types import Function, FunctionResultStatus
 from game_sdk.game.agent import Agent
 from collections import deque
-from dacite import from_dict
 from rich import print, box
 from rich.panel import Panel
 from dotenv import load_dotenv
 
-
-load_dotenv()
+load_dotenv(override=True)
 
 STATE_FILE = "job_state.json"
-
 
 def load_state() -> Dict[str, Any]:
     if os.path.exists(STATE_FILE):
@@ -125,88 +125,6 @@ def get_travel_proposal_function(acp_plugin: AcpPlugin) -> Function:
         job_id = next(iter(state), None)
 
         if not job_id:
-            job_id = "job_1"
-            state[job_id] = {
-                "Alpha": {
-                    "status": "",
-                    "acquired": "",
-                },
-                "Analysis": {
-                    "status": "INITIALIZING",
-                    "jobs": {
-                        "flight_finder": {"status": "NOT_STARTED"},
-                        "accomodation_n_acitivity_finder": {"status": "NOT_STARTED"},
-                    }
-                }
-            }
-            save_state(state)
-
-        travel_job = state[job_id]["Alpha"]
-        if travel_job:
-            if travel_job["status"] == "PENDING":
-                return FunctionResultStatus.FAILED, "Travel job is already pending", {}
-            elif travel_job["status"] == "COMPLETED":
-                return FunctionResultStatus.FAILED, "Travel job is already completed", {}
-
-        initiator = Agent(
-            api_key=os.getenv("GAME_API_KEY"),
-            name="travey",
-            agent_goal="Initiate a job with an agent that provides travel planning service.",
-            agent_description="""
-            1. Search for an trip planning agent using searchAgents.
-            2. NO EVALUATOR IS NEEDED (requireEvaluator=False).
-            """,
-            workers=[
-                acp_plugin.get_worker({
-                    "functions": [acp_plugin.search_agents_functions, acp_plugin.initiate_job]
-                })
-            ],
-            get_agent_state_fn=lambda *args, **kwargs: get_acp_state(acp_plugin)
-        )
-
-        initiator.compile()
-
-        current_acp_state = acp_plugin.get_acp_state()
-        print(f"ACP Jobs: {current_acp_state}")
-
-        current_jobs = current_acp_state["jobs"]["active"].get("asABuyer", [])
-
-        initiator.get_worker("acp_worker").run("Find an agent that can provides travel planning service.")
-
-        updated_acp_state = acp_plugin.get_acp_state()
-        updated_jobs = updated_acp_state["jobs"]["active"].get("asABuyer", [])
-
-        new_job = next(
-            (job for job in updated_jobs if job["jobId"] not in [j["jobId"] for j in current_jobs]),
-            None
-        )
-
-        if not new_job:
-            return FunctionResultStatus.FAILED, "Failed to create job in ACP system", {}
-
-        state[job_id]["Travel"] = {
-            "status": "PENDING",
-            "acpJobId": new_job["jobId"]
-        }
-        save_state(state)
-
-        print(Panel(f"Job initiated: {new_job}", title="Travel Requirement", box=box.ROUNDED, title_align="left"))
-
-        return FunctionResultStatus.DONE, "TRAVEL REQUIREMENT INITIATED", {}
-
-    return Function(
-        fn_name="get_travel_proposal",
-        fn_description="Initiate a job to get travel planning service.",
-        args=[],
-        executable=get_travel_proposal_executable
-    )
-
-def get_travel_proposal_function(acp_plugin: AcpPlugin) -> Function:
-    def get_travel_proposal_executable() -> Tuple[FunctionResultStatus, str, dict]:
-        state = load_state()
-        job_id = next(iter(state), None)
-
-        if not job_id:
             return FunctionResultStatus.FAILED, "Should get travel requirement first", {}
 
         analysis_jobs = state[job_id].get("Analysis", {})
@@ -257,7 +175,8 @@ def get_travel_proposal_function(acp_plugin: AcpPlugin) -> Function:
             get_agent_state_fn=lambda *args, **kwargs: get_acp_state(acp_plugin)
         )
 
-        travel_proposal_agents = [flight_finder_initiator,"flight_finding", f"Find an agent that provides flight finding service for token with the following serviceRequirement: {state[job_id]['Alpha']['acquired']}"),
+        travel_proposal_agents = [
+            (flight_finder_initiator, "flight_finding", f"Find an agent that provides flight finding service for token with the following serviceRequirement: {state[job_id]['Alpha']['acquired']}"),
             (accomodation_n_acitivity_finder_initator, "sn", f"Find an token audit agent to do onchain due diligence for token on Base chain with the following serviceRequirement: {state[job_id]['Alpha']['acquired']}"),
         ]
 
@@ -314,52 +233,12 @@ def get_travel_proposal_function(acp_plugin: AcpPlugin) -> Function:
         executable=get_travel_proposal_executable
     )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# GAME Twitter Plugin options
-options = {
-    "id": "twitter_plugin",
-    "name": "Twitter Plugin",
-    "description": "Twitter Plugin for tweet-related functions.",
-    "credentials": {
-        "game_twitter_access_token": env.SELLER_AGENT_GAME_TWITTER_ACCESS_TOKEN
-    },
-}
-
-# Native Twitter Plugin options
-# options = {
-#     "id": "twitter_plugin",
-#     "name": "Twitter Plugin",
-#     "description": "Twitter Plugin for tweet-related functions.",
-#     "credentials": {
-#         "bearerToken": env.SELLER_AGENT_TWITTER_BEARER_TOKEN,
-#         "apiKey": env.SELLER_AGENT_TWITTER_API_KEY,
-#         "apiSecretKey": env.SELLER_AGENT_TWITTER_API_SECRET_KEY,
-#         "accessToken": env.SELLER_AGENT_TWITTER_ACCESS_TOKEN,
-#         "accessTokenSecret": env.SELLER_AGENT_TWITTER_ACCESS_TOKEN_SECRET,
-#     },
-# }
-
 def seller(use_thread_lock: bool = True):
+    env = PluginEnvSettings()
+
     if env.WHITELISTED_WALLET_PRIVATE_KEY is None:
         return
-    
+
     if env.SELLER_ENTITY_ID is None:
         return
 
@@ -461,14 +340,14 @@ def seller(use_thread_lock: bool = True):
                     """
         else:
             out += "No need to react to the phase change\n\n"
-            
+
         if prompt:
             agent.get_worker("acp_worker").run(prompt)
             out += f"Running task:\n{prompt}\n\n"
             out += "✅ Seller has responded to job.\n"
-            
+
         print(Panel(out, title="🔁 Reaction", box=box.ROUNDED, title_align="left", border_style="red"))
-    
+
     acp_plugin = AcpPlugin(
         options=AcpPluginOptions(
             api_key=env.GAME_API_KEY,
@@ -478,8 +357,6 @@ def seller(use_thread_lock: bool = True):
                 on_new_task=on_new_task,
                 entity_id=env.SELLER_ENTITY_ID
             ),
-            # GAME Twitter Plugin
-            twitter_plugin=TwitterPlugin(options),
         )
     )
 
@@ -488,63 +365,11 @@ def seller(use_thread_lock: bool = True):
         state_dict = to_serializable_dict(state)
         return state_dict
 
-    def generate_meme(description: str, job_id: int, reasoning: str) -> Tuple[FunctionResultStatus, str, dict]:
-        if not job_id or job_id == 'None':
-            return FunctionResultStatus.FAILED, f"job_id is invalid. Should only respond to active as a seller job.", {}
-
-        state = acp_plugin.get_acp_state()
-        
-        job = next(
-            (j for j in state.get('jobs',{}).get('active',{}).get('asASeller',[]) if j.get('jobId') == job_id),
-            None
-        )
-
-        if not job:
-            return FunctionResultStatus.FAILED, f"Job {job_id} is invalid. Should only respond to active as a seller job.", {}
-
-        url = "https://example.com/meme"
-
-        meme = IInventory(
-            jobId=job_id,
-            type="url",
-            value=url,
-            clientName=job.get("clientName"),
-            providerName=job.get("providerName"),
-        )
-
-        acp_plugin.add_produce_item(meme)
-
-        return FunctionResultStatus.DONE, f"Meme generated with the URL: {url}", {}
-
-    generate_meme_function = Function(
-        fn_name="generate_meme",
-        fn_description="A function to generate meme",
-        args=[
-            Argument(
-                name="description",
-                type="str",
-                description="A description of the meme generated"
-            ),
-            Argument(
-                name="job_id",
-                type="integer", 
-                description="Job that your are responding to."
-            ),
-            Argument(
-                name="reasoning",
-                type="str",
-                description="The reasoning of the tweet"
-            )   
-        ],
-        executable=generate_meme
-    )
-
     acp_worker = acp_plugin.get_worker(
         {
             "functions": [
                 acp_plugin.respond_job,
                 acp_plugin.deliver_job,
-                generate_meme_function
             ]
         }
     )
