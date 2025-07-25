@@ -14,9 +14,16 @@ load_dotenv(override=True)
 def traveler(use_thread_lock: bool = True):
     env = TravelDemoEnvSettings()
 
+    if env.WHITELISTED_WALLET_PRIVATE_KEY is None:
+        raise ValueError("WHITELISTED_WALLET_PRIVATE_KEY is not set")
+    if env.TRAVELER_AGENT_WALLET_ADDRESS is None:
+        raise ValueError("TRAVELER_AGENT_WALLET_ADDRESS is not set")
+    if env.TRAVELER_ENTITY_ID is None:
+        raise ValueError("TRAVELER_ENTITY_ID is not set")
+
     job_queue = deque()
-    job_queue_lock = threading.Lock()
     initiate_job_lock = threading.Lock()
+    job_queue_lock = threading.Lock()
     job_event = threading.Event()
 
     def safe_append_job(job):
@@ -101,7 +108,7 @@ def traveler(use_thread_lock: bool = True):
     )
 
     relevant_agents = acp.browse_agents(
-        keyword="travel agency",
+        keyword="flights finder",
         cluster="demo-travel",
         graduated=False
     )
@@ -116,10 +123,10 @@ def traveler(use_thread_lock: bool = True):
     with initiate_job_lock:
         chosen_job_offering.initiate_job(
             service_requirement={
-                "from": "Kuala Lumpur, Malaysia",
-                "placeToVisit": "HangZhou, China",
-                "startDate (yyyy/mm/dd)": "2025/08/23",
-                "durationInDays": 2
+                "origin (IATA code)": "Madrid",
+                "destination (IATA code)": "New York",
+                "departureDate (YYYY-MM-DD)": "2025/07/26",
+                "returnDate (YYYY-MM-DD)": "2025/07/29"
             },
             expired_at=datetime.now() + timedelta(minutes=8)
         )
@@ -128,4 +135,4 @@ def traveler(use_thread_lock: bool = True):
     threading.Event().wait()
 
 if __name__ == "__main__":
-    traveler()
+    traveler(use_thread_lock=False)

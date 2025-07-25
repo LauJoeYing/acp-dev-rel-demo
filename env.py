@@ -12,6 +12,9 @@ class TravelDemoEnvSettings(BaseSettings):
     PLANNER_ENTITY_ID: int
     FLIGHT_FINDER_ENTITY_ID: int
     GAME_API_KEY: str
+    AMADEUS_API_KEY: str
+    AMADEUS_API_SECRET: str
+    SERPAPI_API_KEY: str
 
     @field_validator("WHITELISTED_WALLET_PRIVATE_KEY")
     def strip_0x_prefix(cls, v: str):
